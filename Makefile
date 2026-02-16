@@ -1,4 +1,7 @@
-CC=gcc
+CC_CMD=gcc
+CC_FLAGS= -Wall -Werror
+
+CC=$(CC_CMD) $(CC_FLAGS)
 
 C_FILES= src/main.c
 BUILD_DIR=build

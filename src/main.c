@@ -16,7 +16,7 @@ int main() {
 
   struct sockaddr_in serv_addr;
 
-  uint8_t *buffer = "Hello World\n";
+  const char *buffer = "Hello World\n";
 
   listen_fd = socket(AF_INET, SOCK_STREAM, 0);
   memset(&serv_addr, 0, sizeof(serv_addr));
