@@ -1,15 +1,36 @@
 #include "server.h"
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
+#define MAX_EPOLL_SIZE 10
+
 const int32_t LISTEN_QUEUE_SIZE = 10;
 _Atomic uint32_t running = 1;
+
+static int setnonblocking(int sockfd) {
+  if (fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL, 0) | O_NONBLOCK) == -1) {
+    return -1;
+  }
+  return 0;
+}
+
+static void epoll_ctl_add(int epfd, int fd, uint32_t events) {
+  struct epoll_event ev;
+  ev.events = events;
+  ev.data.fd = fd;
+  if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+    perror("epoll_ctl()\n");
+    exit(1);
+  }
+}
 
 typedef struct {
   int32_t listen_fd;
@@ -20,10 +41,36 @@ void *server_runtime(void *args) {
 
   server_runtime_args *config = (server_runtime_args *)args;
 
+  struct epoll_event events[MAX_EPOLL_SIZE];
+  int32_t epoll_fd = epoll_create(1);
+
+  setnonblocking(config->listen_fd);
+  epoll_ctl_add(epoll_fd, config->listen_fd, EPOLLIN | EPOLLOUT | EPOLLET);
+
   while (running) {
-    int32_t connfd = accept(config->listen_fd, NULL, NULL);
-    (config->cb)();
-    close(connfd);
+
+    int32_t event_count = epoll_wait(epoll_fd, events, MAX_EPOLL_SIZE, -1);
+
+    for (int i = 0; i < event_count; i++) {
+      if (events[i].data.fd == config->listen_fd) {
+        int32_t connfd = accept(config->listen_fd, NULL, NULL);
+        (config->cb)();
+        setnonblocking(connfd);
+        epoll_ctl_add(epoll_fd, connfd,
+                      EPOLLIN | EPOLLET | EPOLLRDHUP | EPOLLHUP);
+      }
+
+      if (events[i].events & EPOLLIN) {
+        printf("Received data from client\n");
+      }
+
+      if (events[i].events & (EPOLLRDHUP | EPOLLHUP)) {
+        printf("Client disconnected\n");
+        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
+        close(events[i].data.fd);
+        continue;
+      }
+    }
   }
 
   return NULL;
