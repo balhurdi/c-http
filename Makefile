@@ -1,22 +1,43 @@
-CC_CMD=gcc
-CC_FLAGS= -Wall -Werror
+# Compiler
+CC = gcc
 
-CC=$(CC_CMD) $(CC_FLAGS)
+# Compiler flags
+CFLAGS = -Wall -Wextra -std=c11 -O2
 
-C_FILES= src/main.c
-BUILD_DIR=build
+# Directories
+SRC_DIR = src
+BUILD_DIR = build
 
-default: $(BUILD_DIR) $(BUILD_DIR)/server
+# Output binary
+TARGET = $(BUILD_DIR)/server
 
-$(BUILD_DIR)/server.o: $(C_FILES)
-	$(CC) -c $(C_FILES) -o $(BUILD_DIR)/server.o
+# Find all source files
+SRCS = $(wildcard $(SRC_DIR)/*.c)
 
-$(BUILD_DIR)/server: $(BUILD_DIR)/server.o
-	$(CC) $(BUILD_DIR)/server.o -o $(BUILD_DIR)/server
+# Generate object file names in build directory
+OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 
+# Default target
+all: $(BUILD_DIR) $(TARGET)
+
+# Link objects into final executable
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+# Compile each .c into .o
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Create build directory if it doesn't exist
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
+# Run the program
+run: all
+	./$(TARGET)
+
+# Clean build files
 clean:
-	-rm -rf $(BUILD_DIR)
-	
+	rm -rf $(BUILD_DIR) $(TARGET)
+
+.PHONY: all clean run
