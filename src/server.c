@@ -7,13 +7,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #define MAX_EPOLL_SIZE 10
 
 const int32_t LISTEN_QUEUE_SIZE = 10;
-_Atomic uint32_t running = 1;
 
 static int setnonblocking(int sockfd) {
   if (fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL, 0) | O_NONBLOCK) == -1) {
@@ -34,6 +34,7 @@ static void epoll_ctl_add(int epfd, int fd, uint32_t events) {
 
 typedef struct {
   int32_t listen_fd;
+  int32_t cancellation_token_fd;
   on_client_connect_cb cb;
 } server_runtime_args;
 
@@ -46,6 +47,9 @@ void *server_runtime(void *args) {
 
   setnonblocking(config->listen_fd);
   epoll_ctl_add(epoll_fd, config->listen_fd, EPOLLIN | EPOLLOUT | EPOLLET);
+  epoll_ctl_add(epoll_fd, config->cancellation_token_fd, EPOLLIN);
+
+  uint32_t running = 1;
 
   while (running) {
 
@@ -60,7 +64,8 @@ void *server_runtime(void *args) {
                       EPOLLIN | EPOLLET | EPOLLRDHUP | EPOLLHUP);
       }
 
-      if (events[i].events & EPOLLIN) {
+      if (events[i].events & EPOLLIN &&
+          events[i].data.fd == config->listen_fd) {
         printf("Received data from client\n");
       }
 
@@ -69,6 +74,11 @@ void *server_runtime(void *args) {
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
         close(events[i].data.fd);
         continue;
+      }
+
+      if (events[i].data.fd == config->cancellation_token_fd) {
+        printf("Triggered cancellation token\n");
+        running = 0;
       }
     }
   }
@@ -111,8 +121,11 @@ server_t server_start(uint16_t port, on_client_connect_cb cb) {
 
   pthread_t thread;
   server_runtime_args *runtime_args = malloc(sizeof(server_runtime_args));
+  int32_t cancellation_token = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+
   runtime_args->cb = cb;
   runtime_args->listen_fd = listen_fd;
+  runtime_args->cancellation_token_fd = cancellation_token;
 
   pthread_create(&thread, NULL, &server_runtime, (void *)runtime_args);
 
@@ -124,8 +137,8 @@ server_t server_start(uint16_t port, on_client_connect_cb cb) {
 }
 
 void stop(server_t server) {
-  running = 0;
   void *r;
+  eventfd_write(server->runtime_args->cancellation_token_fd, 1);
   pthread_join(server->running_thread, &r);
   shutdown(server->listen_fd, SHUT_RDWR);
   close(server->listen_fd);
