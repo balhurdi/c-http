@@ -8,6 +8,8 @@ void build_server_lib() {
                                          .warnings = FLAG_WARNINGS_VERBOSE});
 
   AddFile(server_lib, "./src/server.c");
+  AddFile(server_lib, "./src/client.c");
+
   InstallStaticLib(server_lib);
 }
 
