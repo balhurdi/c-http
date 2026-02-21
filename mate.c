@@ -4,11 +4,21 @@
 i32 main(void) {
   StartBuild();
   {
-    Executable executable = CreateExecutable(
-        (ExecutableOptions){.output = "server", .flags = "-Wall -g"});
+    StaticLib server_lib =
+        CreateStaticLib((StaticLibOptions){.output = "libserver",
+                                           .debug = FLAG_DEBUG,
+                                           .warnings = FLAG_WARNINGS_VERBOSE});
 
+    AddFile(server_lib, "./src/server.c");
+    InstallStaticLib(server_lib);
+
+    Executable executable =
+        CreateExecutable((ExecutableOptions){.output = "main",
+                                             .debug = FLAG_DEBUG,
+                                             .warnings = FLAG_WARNINGS_VERBOSE});
     AddFile(executable, "./src/main.c");
-    AddFile(executable, "./src/server.c");
+    AddLibraryPaths(executable, "./build");
+    LinkSystemLibraries(executable, "server");
 
     InstallExecutable(executable);
   }
