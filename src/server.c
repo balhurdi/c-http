@@ -76,7 +76,7 @@ void server_start(uint16_t port, on_client_connect_cb cb) {
                       EPOLLIN | EPOLLET | EPOLLRDHUP | EPOLLHUP);
       }
 
-      if (events[i].events & EPOLLIN && events[i].data.fd == listen_fd) {
+      if (events[i].events & EPOLLIN && events[i].data.fd != listen_fd) {
         printf("Received data from client\n");
       }
 
