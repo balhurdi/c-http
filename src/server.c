@@ -32,7 +32,8 @@ static void epoll_ctl_add(int epfd, int fd, uint32_t events) {
   }
 }
 
-void server_start(uint16_t port, on_client_connect_cb cb) {
+void server_start(uint16_t port, on_client_connect_cb cb,
+                  on_client_msg_cb msg_cb, on_client_disconnect_cb dc_cb) {
 
   client_pool_t client_pool = client_pool_new();
 
@@ -83,14 +84,14 @@ void server_start(uint16_t port, on_client_connect_cb cb) {
       if (events[i].events & EPOLLIN && events[i].data.fd != listen_fd) {
         client_t client =
             client_pool_get_client(client_pool, events[i].data.fd);
-        int32_t cli_fd = client_fd(client);
-        printf("Received data from client %d\n", cli_fd);
+        (msg_cb)(client);
       }
 
       if (events[i].events & (EPOLLRDHUP | EPOLLHUP)) {
-        printf("Client disconnected\n");
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
         close(events[i].data.fd);
+        client_t client = client_pool_get_client(client_pool, events[i].data.fd);
+        (dc_cb)(client);
         client_pool_remove_client(client_pool, events[i].data.fd);
         continue;
       }
