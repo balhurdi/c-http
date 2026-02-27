@@ -6,8 +6,7 @@
   {
     "label": "Debug server",
     "build": {
-      "command": "make",
-      "args": ["-j8"],
+      "command": "./build.sh",
       "cwd": "$ZED_WORKTREE_ROOT",
     },
     "program": "$ZED_WORKTREE_ROOT/build/server",
