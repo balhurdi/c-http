@@ -1,4 +1,5 @@
 #include "server.h"
+#include "client.h"
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <stdint.h>
@@ -32,6 +33,8 @@ static void epoll_ctl_add(int epfd, int fd, uint32_t events) {
 }
 
 void server_start(uint16_t port, on_client_connect_cb cb) {
+
+  client_pool_t client_pool = client_pool_new();
 
   struct sockaddr_in serv_addr = {0};
 
@@ -70,6 +73,7 @@ void server_start(uint16_t port, on_client_connect_cb cb) {
     for (int i = 0; i < event_count; i++) {
       if (events[i].data.fd == listen_fd) {
         int32_t connfd = accept(listen_fd, NULL, NULL);
+        client_pool_add_client(client_pool, connfd);
         (cb)();
         setnonblocking(connfd);
         epoll_ctl_add(epoll_fd, connfd,
@@ -77,15 +81,21 @@ void server_start(uint16_t port, on_client_connect_cb cb) {
       }
 
       if (events[i].events & EPOLLIN && events[i].data.fd != listen_fd) {
-        printf("Received data from client\n");
+        client_t client =
+            client_pool_get_client(client_pool, events[i].data.fd);
+        int32_t cli_fd = client_fd(client);
+        printf("Received data from client %d\n", cli_fd);
       }
 
       if (events[i].events & (EPOLLRDHUP | EPOLLHUP)) {
         printf("Client disconnected\n");
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
         close(events[i].data.fd);
+        client_pool_remove_client(client_pool, events[i].data.fd);
         continue;
       }
     }
   }
+
+  client_pool_drop(client_pool);
 }
