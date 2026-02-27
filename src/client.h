@@ -6,7 +6,7 @@ typedef struct _client *client_t;
 typedef struct _client_pool *client_pool_t;
 
 client_pool_t client_pool_new();
-void client_pool_add_client(client_pool_t pool, int32_t client_fd);
+client_t client_pool_add_client(client_pool_t pool, int32_t client_fd);
 void client_pool_remove_client(client_pool_t pool, int32_t client_fd);
 client_t client_pool_get_client(client_pool_t pool, int32_t client_fd);
 void client_pool_drop(client_pool_t client_pool);
