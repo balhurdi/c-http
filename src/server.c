@@ -63,17 +63,12 @@ server_t server_start(uint16_t port, on_client_connect_cb cb) {
     return NULL;
   }
 
-  int32_t cancellation_token = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
-
   struct epoll_event events[MAX_EPOLL_SIZE];
   int32_t epoll_fd = epoll_create(1);
 
   epoll_ctl_add(epoll_fd, listen_fd, EPOLLIN | EPOLLOUT | EPOLLET);
-  epoll_ctl_add(epoll_fd, cancellation_token, EPOLLIN);
 
-  uint32_t running = 1;
-
-  while (running) {
+  while (1) {
 
     int32_t event_count = epoll_wait(epoll_fd, events, MAX_EPOLL_SIZE, -1);
 
@@ -95,11 +90,6 @@ server_t server_start(uint16_t port, on_client_connect_cb cb) {
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
         close(events[i].data.fd);
         continue;
-      }
-
-      if (events[i].data.fd == cancellation_token) {
-        printf("Triggered cancellation token\n");
-        running = 0;
       }
     }
   }
