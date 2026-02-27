@@ -12,7 +12,6 @@ int main() {
       return -1;
   }
 
-  getchar();
   stop(server);
   return 0;
 }
