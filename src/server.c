@@ -73,8 +73,8 @@ void server_start(uint16_t port, on_client_connect_cb cb) {
     for (int i = 0; i < event_count; i++) {
       if (events[i].data.fd == listen_fd) {
         int32_t connfd = accept(listen_fd, NULL, NULL);
-        client_pool_add_client(client_pool, connfd);
-        (cb)();
+        client_t client = client_pool_add_client(client_pool, connfd);
+        (cb)(client);
         setnonblocking(connfd);
         epoll_ctl_add(epoll_fd, connfd,
                       EPOLLIN | EPOLLET | EPOLLRDHUP | EPOLLHUP);
