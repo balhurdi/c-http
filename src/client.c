@@ -8,6 +8,7 @@
 
 typedef struct _client {
   int32_t conn_fd;
+  char *data;
   bool is_alive;
 } *client_t;
 
@@ -40,6 +41,7 @@ client_t client_pool_add_client(client_pool_t pool, int32_t client_fd) {
 
   struct _client new_client = (struct _client){
       .conn_fd = client_fd,
+      .data = NULL,
       .is_alive = true,
   };
 
@@ -55,6 +57,7 @@ client_t client_pool_add_client(client_pool_t pool, int32_t client_fd) {
       realloc(pool->arena, sizeof(struct _client) * pool->max_size * 2);
   for (size_t i = pool->max_size; i < new_max_size; i++) {
     pool->arena[i].conn_fd = 0;
+    pool->arena[i].data = NULL;
     pool->arena[i].is_alive = false;
   }
 
@@ -72,6 +75,7 @@ void client_pool_remove_client(client_pool_t pool, int32_t client_fd) {
     struct _client client = pool->arena[i];
     if (client.conn_fd == client_fd && client.is_alive == true) {
       pool->arena[i].conn_fd = 0;
+      pool->arena[i].data = NULL;
       pool->arena[i].is_alive = false;
       break;
     }
