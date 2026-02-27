@@ -101,10 +101,11 @@ void client_pool_drop(client_pool_t client_pool) {
   free(client_pool);
 }
 
-void client_recvd_data(client_t client, char *data, size_t *size) {
+const char *client_recvd_data(client_t client, size_t *size) {
   (void)client;
-  (void)data;
   (void)size;
+
+  return NULL;
 }
 void client_send_data(client_t client, const char *data, size_t data_len) {
   (void)client;
