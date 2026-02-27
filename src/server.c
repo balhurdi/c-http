@@ -31,12 +31,7 @@ static void epoll_ctl_add(int epfd, int fd, uint32_t events) {
   }
 }
 
-typedef struct _server {
-  int32_t listen_fd;
-} *server_t;
-
-server_t server_start(uint16_t port, on_client_connect_cb cb) {
-  server_t server = (server_t)malloc(sizeof(struct _server));
+void server_start(uint16_t port, on_client_connect_cb cb) {
 
   struct sockaddr_in serv_addr = {0};
 
@@ -53,14 +48,14 @@ server_t server_start(uint16_t port, on_client_connect_cb cb) {
       bind(listen_fd, (const struct sockaddr *)&serv_addr, sizeof(serv_addr));
 
   if (res != 0) {
-    return NULL;
+    return;
   }
 
   res = listen(listen_fd, LISTEN_QUEUE_SIZE);
   setnonblocking(listen_fd);
 
   if (res != 0) {
-    return NULL;
+    return;
   }
 
   struct epoll_event events[MAX_EPOLL_SIZE];
@@ -93,12 +88,4 @@ server_t server_start(uint16_t port, on_client_connect_cb cb) {
       }
     }
   }
-
-  return server;
-}
-
-void stop(server_t server) {
-  shutdown(server->listen_fd, SHUT_RDWR);
-  close(server->listen_fd);
-  free(server);
 }
