@@ -1,7 +1,6 @@
 #include "server.h"
 #include <fcntl.h>
 #include <netinet/in.h>
-#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,68 +31,7 @@ static void epoll_ctl_add(int epfd, int fd, uint32_t events) {
   }
 }
 
-typedef struct {
-  int32_t listen_fd;
-  int32_t cancellation_token_fd;
-  on_client_connect_cb cb;
-} server_runtime_args;
-
-void *server_runtime(void *args) {
-
-  server_runtime_args *config = (server_runtime_args *)args;
-
-  struct epoll_event events[MAX_EPOLL_SIZE];
-  int32_t epoll_fd = epoll_create(1);
-
-  setnonblocking(config->listen_fd);
-  epoll_ctl_add(epoll_fd, config->listen_fd, EPOLLIN | EPOLLOUT | EPOLLET);
-  epoll_ctl_add(epoll_fd, config->cancellation_token_fd, EPOLLIN);
-
-  uint32_t running = 1;
-
-  while (running) {
-
-    int32_t event_count = epoll_wait(epoll_fd, events, MAX_EPOLL_SIZE, -1);
-
-    for (int i = 0; i < event_count; i++) {
-      if (events[i].data.fd == config->listen_fd) {
-        int32_t connfd = accept(config->listen_fd, NULL, NULL);
-        (config->cb)();
-        setnonblocking(connfd);
-        epoll_ctl_add(epoll_fd, connfd,
-                      EPOLLIN | EPOLLET | EPOLLRDHUP | EPOLLHUP);
-      }
-
-      if (events[i].events & EPOLLIN &&
-          events[i].data.fd == config->listen_fd) {
-        printf("Received data from client\n");
-      }
-
-      if (events[i].events & (EPOLLRDHUP | EPOLLHUP)) {
-        printf("Client disconnected\n");
-        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
-        close(events[i].data.fd);
-        continue;
-      }
-
-      if (events[i].data.fd == config->cancellation_token_fd) {
-        printf("Triggered cancellation token\n");
-        running = 0;
-      }
-    }
-  }
-
-  return NULL;
-}
-
-typedef struct _server {
-  int32_t listen_fd;
-  server_runtime_args *runtime_args;
-  pthread_t running_thread;
-} *server_t;
-
-server_t server_start(uint16_t port, on_client_connect_cb cb) {
-  server_t server = (server_t)malloc(sizeof(struct _server));
+void server_start(uint16_t port, on_client_connect_cb cb) {
 
   struct sockaddr_in serv_addr = {0};
 
@@ -110,38 +48,44 @@ server_t server_start(uint16_t port, on_client_connect_cb cb) {
       bind(listen_fd, (const struct sockaddr *)&serv_addr, sizeof(serv_addr));
 
   if (res != 0) {
-    return NULL;
+    return;
   }
 
   res = listen(listen_fd, LISTEN_QUEUE_SIZE);
+  setnonblocking(listen_fd);
 
   if (res != 0) {
-    return NULL;
+    return;
   }
 
-  pthread_t thread;
-  server_runtime_args *runtime_args = malloc(sizeof(server_runtime_args));
-  int32_t cancellation_token = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+  struct epoll_event events[MAX_EPOLL_SIZE];
+  int32_t epoll_fd = epoll_create(1);
 
-  runtime_args->cb = cb;
-  runtime_args->listen_fd = listen_fd;
-  runtime_args->cancellation_token_fd = cancellation_token;
+  epoll_ctl_add(epoll_fd, listen_fd, EPOLLIN | EPOLLOUT | EPOLLET);
 
-  pthread_create(&thread, NULL, &server_runtime, (void *)runtime_args);
+  while (1) {
 
-  server->listen_fd = listen_fd;
-  server->runtime_args = runtime_args;
-  server->running_thread = thread;
+    int32_t event_count = epoll_wait(epoll_fd, events, MAX_EPOLL_SIZE, -1);
 
-  return server;
-}
+    for (int i = 0; i < event_count; i++) {
+      if (events[i].data.fd == listen_fd) {
+        int32_t connfd = accept(listen_fd, NULL, NULL);
+        (cb)();
+        setnonblocking(connfd);
+        epoll_ctl_add(epoll_fd, connfd,
+                      EPOLLIN | EPOLLET | EPOLLRDHUP | EPOLLHUP);
+      }
 
-void stop(server_t server) {
-  void *r;
-  eventfd_write(server->runtime_args->cancellation_token_fd, 1);
-  pthread_join(server->running_thread, &r);
-  shutdown(server->listen_fd, SHUT_RDWR);
-  close(server->listen_fd);
-  free(server->runtime_args);
-  free(server);
+      if (events[i].events & EPOLLIN && events[i].data.fd != listen_fd) {
+        printf("Received data from client\n");
+      }
+
+      if (events[i].events & (EPOLLRDHUP | EPOLLHUP)) {
+        printf("Client disconnected\n");
+        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
+        close(events[i].data.fd);
+        continue;
+      }
+    }
+  }
 }
