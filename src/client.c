@@ -54,7 +54,7 @@ void client_pool_add_client(client_pool_t pool, int32_t client_fd) {
 
   if (!fits_in_arena) {
     size_t new_max_size = pool->max_size * 2;
-    pool->arena = realloc(pool->arena, pool->max_size * 2);
+    pool->arena = realloc(pool->arena, sizeof(struct _client) * pool->max_size * 2);
     for (size_t i = pool->max_size; i < new_max_size; i++) {
       pool->arena[i].conn_fd = 0;
       pool->arena[i].is_alive = false;
@@ -107,4 +107,8 @@ void client_send_data(client_t client, const char *data, size_t data_len) {
     (void)client;
     (void)data;
     (void)data_len;
+}
+
+int32_t client_fd(client_t client) {
+    return client->conn_fd;
 }
